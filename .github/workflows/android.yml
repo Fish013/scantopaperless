@@ -26,8 +26,6 @@ jobs:
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-    - name: Build with Gradle
-      run: ./gradlew build
     - name: Get version name
       id: version
       run: |
@@ -37,30 +35,54 @@ jobs:
           VERSION=$(grep versionName app/build.gradle | sed 's/.*"\(.*\)".*/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         fi
-    - name: Rename APK for release
-      if: github.ref_type == 'tag' || github.event_name == 'release'
+    - name: Decode keystore
       run: |
-        cp app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/scan-to-paperless-${{ steps.version.outputs.VERSION }}.apk
-    - name: Upload APK
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+    - name: Build with Gradle (signed release)
+      run: ./gradlew build bundleRelease
+      env:
+        SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+    - name: Sign APK with v1 and v2 signatures
+      run: |
+        # Find the unsigned release APK
+        APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+        APK_DIR=$(dirname "$APK_PATH")
+        APK_BASENAME=$(basename "$APK_PATH" .apk)
+        SIGNED_APK="${APK_DIR}/${APK_BASENAME}-signed.apk"
+        ALIGNED_APK="${APK_DIR}/${APK_BASENAME}-aligned.apk"
+        
+        # Sign with jarsigner (v1 signature)
+        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+          -keystore app/keystore.jks -storepass "${{ secrets.SIGNING_STORE_PASSWORD }}" \
+          -keypass "${{ secrets.SIGNING_KEY_PASSWORD }}" \
+          -signedjar "$SIGNED_APK" "$APK_PATH" "${{ secrets.SIGNING_KEY_ALIAS }}"
+        
+        # Align APK
+        zipalign -v 4 "$SIGNED_APK" "$ALIGNED_APK"
+        
+        # Sign with apksigner (adds v2 signature)
+        apksigner sign --ks app/keystore.jks \
+          --ks-pass pass:"${{ secrets.SIGNING_STORE_PASSWORD }}" \
+          --ks-key-alias "${{ secrets.SIGNING_KEY_ALIAS }}" \
+          --key-pass pass:"${{ secrets.SIGNING_KEY_PASSWORD }}" \
+          --v2-signing-enabled true \
+          "$ALIGNED_APK"
+        
+        # Rename for release
+        mv "$ALIGNED_APK" "$APK_DIR/scan-to-paperless-${{ steps.version.outputs.VERSION }}.apk"
+        
+        # Clean up unsigned and intermediate files
+        rm -f "$APK_PATH" "$SIGNED_APK"
+    - name: Upload signed APK
       uses: actions/upload-artifact@v6
       with:
         name: app-release
-        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        path: app/build/outputs/apk/release/scan-to-paperless-*.apk
         if-no-files-found: error
-    - name: Upload renamed APK
-      if: github.ref_type == 'tag' || github.event_name == 'release'
-      uses: actions/upload-artifact@v6
-      with:
-        name: scan-to-paperless-${{ steps.version.outputs.VERSION }}
-        path: app/build/outputs/apk/release/scan-to-paperless-${{ steps.version.outputs.VERSION }}.apk
-        if-no-files-found: error
-    - name: Upload APK to Release
+    - name: Upload to Release
       if: github.ref_type == 'tag'
       uses: softprops/action-gh-release@v2
       with:
         files: app/build/outputs/apk/release/scan-to-paperless-${{ steps.version.outputs.VERSION }}.apk
-    - name: Download APK
-      uses: actions/download-artifact@v7
-      with:
-        name: app-release
-        path: downloaded-apk
