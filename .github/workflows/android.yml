@@ -28,7 +28,7 @@ jobs:
       with:
         packages: 'build-tools;34.0.0'
     - name: Accept Android SDK licenses
-      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+      run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -59,7 +59,7 @@ jobs:
         SIGNED_APK="${APK_DIR}/scan-to-paperless-${{ steps.version.outputs.VERSION }}.apk"
         
         # Sign with apksigner (v1 and v2 signatures)
-        $ANDROID_HOME/build-tools/34.0.0/bin/apksigner sign --ks app/keystore.jks \
+        $ANDROID_SDK_ROOT/build-tools/34.0.0/bin/apksigner sign --ks app/keystore.jks \
           --ks-pass pass:"${{ secrets.SIGNING_STORE_PASSWORD }}" \
           --ks-key-alias "${{ secrets.SIGNING_KEY_ALIAS }}" \
           --key-pass pass:"${{ secrets.SIGNING_KEY_PASSWORD }}" \
