@@ -50,31 +50,20 @@ jobs:
         APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -1)
         APK_DIR=$(dirname "$APK_PATH")
         APK_BASENAME=$(basename "$APK_PATH" .apk)
-        SIGNED_APK="${APK_DIR}/${APK_BASENAME}-signed.apk"
-        ALIGNED_APK="${APK_DIR}/${APK_BASENAME}-aligned.apk"
+        SIGNED_APK="${APK_DIR}/scan-to-paperless-${{ steps.version.outputs.VERSION }}.apk"
         
-        # Sign with jarsigner (v1 signature)
-        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-          -keystore app/keystore.jks -storepass "${{ secrets.SIGNING_STORE_PASSWORD }}" \
-          -keypass "${{ secrets.SIGNING_KEY_PASSWORD }}" \
-          -signedjar "$SIGNED_APK" "$APK_PATH" "${{ secrets.SIGNING_KEY_ALIAS }}"
-        
-        # Align APK
-        zipalign -v 4 "$SIGNED_APK" "$ALIGNED_APK"
-        
-        # Sign with apksigner (adds v2 signature)
+        # Sign with apksigner (v1 and v2 signatures)
         apksigner sign --ks app/keystore.jks \
           --ks-pass pass:"${{ secrets.SIGNING_STORE_PASSWORD }}" \
           --ks-key-alias "${{ secrets.SIGNING_KEY_ALIAS }}" \
           --key-pass pass:"${{ secrets.SIGNING_KEY_PASSWORD }}" \
+          --v1-signing-enabled true \
           --v2-signing-enabled true \
-          "$ALIGNED_APK"
+          -o "$SIGNED_APK" \
+          "$APK_PATH"
         
-        # Rename for release
-        mv "$ALIGNED_APK" "$APK_DIR/scan-to-paperless-${{ steps.version.outputs.VERSION }}.apk"
-        
-        # Clean up unsigned and intermediate files
-        rm -f "$APK_PATH" "$SIGNED_APK"
+        # Clean up unsigned file
+        rm -f "$APK_PATH"
     - name: Upload signed APK
       uses: actions/upload-artifact@v6
       with:
