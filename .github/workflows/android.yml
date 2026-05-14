@@ -43,7 +43,7 @@ jobs:
         fi
     - name: Decode keystore
       run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
     - name: Build signed release APK with Gradle
       run: ./gradlew clean assembleRelease
       env:
