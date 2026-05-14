@@ -47,7 +47,7 @@ jobs:
     - name: Build signed release APK with Gradle
       run: ./gradlew clean assembleRelease
       env:
-        SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        SIGNING_KEY_ALIAS: ${{ vars.SIGNING_KEY_ALIAS }}
         SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
     - name: Upload signed APK
